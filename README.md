@@ -220,3 +220,4 @@ Puedes personalizar el CTA para captar leads o abrir un formulario de interés.
 
 Este proyecto es de código abierto y está disponible para uso personal y educativo.
 
+# ViajeIA
