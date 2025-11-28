@@ -333,6 +333,18 @@ def planificar_viaje():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/', methods=['GET'])
+def root():
+    return jsonify({
+        'status': 'ok',
+        'message': 'ViajeIA Backend API',
+        'version': '1.0.0',
+        'endpoints': {
+            'health': '/api/health',
+            'planificar': '/api/planificar (POST)'
+        }
+    }), 200
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'ok', 'message': 'Backend funcionando correctamente'}), 200
