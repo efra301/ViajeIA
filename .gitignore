@@ -8,10 +8,19 @@ __pycache__/
 
 # Environment
 .env
+.env.local
+.env.production
+.env.development
 .venv
 env/
 venv/
 ENV/
+
+# 🔒 SEGURIDAD: Nunca subir archivos con claves API
+*.key
+*.pem
+secrets/
+credentials/
 
 # Build
 dist/
@@ -30,4 +39,5 @@ Thumbs.db
 
 # Logs
 *.log
+
 

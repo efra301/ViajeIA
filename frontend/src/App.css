@@ -822,3 +822,32 @@
   }
 }
 
+/* Pantalla de carga */
+.loading-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e3a5f 0%, #4a90e2 100%);
+  color: white;
+  font-size: 20px;
+}
+
+.loading-screen-content {
+  text-align: center;
+}
+
+.loading-screen-icon {
+  font-size: 48px;
+  margin-bottom: 20px;
+  animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}

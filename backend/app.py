@@ -7,6 +7,10 @@ import time
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
+# 🔒 SEGURIDAD: Importar módulos de seguridad
+from security import validar_pregunta, sanitizar_texto, validar_destino, validar_fecha
+from rate_limiter import verificar_limite, registrar_request
+
 # Cargar variables de entorno desde el archivo .env
 load_dotenv()
 
@@ -27,7 +31,12 @@ else:
 
 # Constantes de optimización
 SYSTEM_PROMPT = "Asistente experto en viajes. Respuestas prácticas y concisas."
-RESPONSE_FORMAT = "Formato obligatorio: » ALOJAMIENTO | Þ COMIDA LOCAL |  LUGARES IMPERDIBLES | ä CONSEJOS LOCALES | ø ESTIMACIÓN DE COSTOS"
+RESPONSE_FORMAT = """Formato obligatorio (5 secciones con saltos de línea):
+» ALOJAMIENTO: [recomendaciones]
+Þ COMIDA LOCAL: [recomendaciones]
+ LUGARES IMPERDIBLES: [recomendaciones]
+ä CONSEJOS LOCALES: [tips]
+ø ESTIMACIÓN DE COSTOS: [breakdown]"""
 MAX_QUESTION_LENGTH = 500
 MIN_QUESTION_LENGTH = 10
 
@@ -179,17 +188,39 @@ def planificar_viaje():
         pregunta = data.get('pregunta', '')
         datos_viaje = data.get('datosViaje', {})
         historial_conversaciones = data.get('historial', [])
+        usuario_id = data.get('usuarioId', request.remote_addr)  # Usar IP si no hay usuarioId
         
-        if not pregunta:
-            return jsonify({'error': 'No se proporcionó una pregunta'}), 400
+        # 🔒 SEGURIDAD: Rate Limiting - Verificar límites de uso
+        limite_check = verificar_limite(usuario_id)
+        if not limite_check['allowed']:
+            return jsonify({
+                'error': limite_check['reason'],
+                'retry_after': limite_check['retry_after'],
+                'limit_type': limite_check['limit_type']
+            }), 429  # 429 = Too Many Requests
         
-        # Validar y limpiar la entrada de la pregunta
-        pregunta = pregunta.strip()
-        if len(pregunta) < MIN_QUESTION_LENGTH:
-            return jsonify({'error': f'La pregunta es muy corta. Mínimo {MIN_QUESTION_LENGTH} caracteres.'}), 400
+        # 🔒 SEGURIDAD: Validar pregunta
+        es_valida, mensaje_error = validar_pregunta(pregunta)
+        if not es_valida:
+            return jsonify({'error': mensaje_error}), 400
         
-        if len(pregunta) > MAX_QUESTION_LENGTH:
-            return jsonify({'error': f'La pregunta es muy larga. Máximo {MAX_QUESTION_LENGTH} caracteres.'}), 400
+        # 🔒 SEGURIDAD: Sanitizar pregunta antes de procesarla
+        pregunta = sanitizar_texto(pregunta.strip())
+        
+        # 🔒 SEGURIDAD: Validar datos del viaje si están presentes
+        if datos_viaje:
+            destino = datos_viaje.get('destino', '')
+            fecha = datos_viaje.get('fecha', '')
+            
+            if destino:
+                es_valido, mensaje = validar_destino(destino)
+                if not es_valido:
+                    return jsonify({'error': mensaje}), 400
+            
+            if fecha:
+                es_valida, mensaje = validar_fecha(fecha)
+                if not es_valida:
+                    return jsonify({'error': mensaje}), 400
         
         # Verificar que Gemini esté configurado
         if not model:
@@ -293,10 +324,10 @@ def planificar_viaje():
             
             # Construir prompt optimizado: sistema + formato + contexto + pregunta
             contexto_texto = "\n".join(contexto) if contexto else ""
-            prompt = f"{SYSTEM_PROMPT}\n{RESPONSE_FORMAT}"
+            prompt = f"{SYSTEM_PROMPT}\n\n{RESPONSE_FORMAT}"
             if contexto_texto:
-                prompt += f"\n{contexto_texto}"
-            prompt += f"\n\nPregunta: {pregunta}"
+                prompt += f"\n\nContexto:\n{contexto_texto}"
+            prompt += f"\n\nPregunta: {pregunta}\n\nResponde usando el formato especificado con saltos de línea entre secciones."
             
             # Generar respuesta con Gemini
             response = model.generate_content(
@@ -323,6 +354,9 @@ def planificar_viaje():
             return jsonify({
                 'error': f'Error con Gemini: {error_msg}'
             }), 500
+        
+        # 🔒 SEGURIDAD: Registrar que el usuario hizo una consulta (después de éxito)
+        registrar_request(usuario_id)
         
         return jsonify({
             'respuesta': respuesta,

@@ -140,13 +140,22 @@
    - De Render: `https://viajeia-backend.onrender.com`
    - O de Railway: `https://tu-app.railway.app`
 
-2. **Actualiza el frontend:**
-   - En Vercel, ve a tu proyecto
-   - Ve a **Settings** → **Environment Variables**
-   - Agrega:
-     ```
-     VITE_API_URL=https://viajeia-backend.onrender.com
-     ```
+2. **Actualiza el frontend - Configurar Variables de Entorno en Vercel:**
+   
+   **Paso a paso:**
+   1. Ve a **https://vercel.com** e inicia sesión
+   2. En el Dashboard, haz clic en tu proyecto "viajeia"
+   3. Haz clic en la pestaña **"Settings"** (arriba)
+   4. En el menú lateral izquierdo, haz clic en **"Environment Variables"**
+   5. Haz clic en **"Add New"** o en el botón para agregar variable
+   6. Completa los campos:
+      - **Key**: `VITE_API_URL`
+      - **Value**: `https://viajeia-backend-c83j.onrender.com` (tu URL de Render)
+      - **Environment**: Selecciona ✅ Production y ✅ Preview
+   7. Haz clic en **"Save"**
+   8. **IMPORTANTE**: Ve a **"Deployments"** y haz clic en **"Redeploy"** en el último deployment
+   
+   📖 **Guía detallada**: Ver `VERCEL_ENV_VARIABLES.md` para instrucciones paso a paso con más detalles
 
 3. **Actualiza el código del frontend:**
    
@@ -201,15 +210,32 @@ Tu aplicación estará disponible en:
 
 ## 🔧 Solución de Problemas
 
-**Error de CORS:**
+### Error 404 en la raíz del backend
+
+**Es normal**: El backend está funcionando, pero Flask solo responde en rutas específicas.
+
+**Para verificar que funciona:**
+1. Prueba el endpoint de health: `https://viajeia-backend-c83j.onrender.com/api/health`
+2. Deberías ver: `{"status": "ok", "message": "Backend funcionando correctamente"}`
+3. La raíz ahora también responde: `https://viajeia-backend-c83j.onrender.com/`
+
+**Si ves 404 en la raíz:**
+- Haz un nuevo commit y push
+- Render redeployará automáticamente
+- Espera 2-3 minutos
+
+### Error de CORS:
 - Verifica que la URL del backend esté correcta
 - Asegúrate de que CORS permita tu dominio de Vercel
+- En Render, agrega la variable: `CORS_ORIGINS=https://tu-app.vercel.app,https://*.vercel.app`
 
-**Backend no responde:**
-- Verifica que las variables de entorno estén configuradas
-- Revisa los logs en Render para ver errores
+### Backend no responde:
+- Verifica que las variables de entorno estén configuradas en Render
+- Revisa los logs en Render (Dashboard → tu servicio → Logs)
+- Verifica que el puerto sea correcto (Render usa la variable PORT automáticamente)
 
-**Frontend no carga:**
-- Verifica que el build sea exitoso
+### Frontend no carga:
+- Verifica que el build sea exitoso en Vercel
 - Revisa la consola del navegador para errores
+- Verifica que `VITE_API_URL` esté configurada en Vercel
 

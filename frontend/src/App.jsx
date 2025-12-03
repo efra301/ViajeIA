@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from './context/AuthContext'
+import Login from './components/Login'
+import Register from './components/Register'
 import './App.css'
 
 const METRICAS_INICIALES = {
@@ -9,7 +12,19 @@ const METRICAS_INICIALES = {
 }
 
 function App() {
+  const { currentUser, logout, guardarConsulta, userData, loading, error } = useAuth()
+  const [mostrarAuth, setMostrarAuth] = useState('login') // 'login' o 'register'
   const [mostrarFormulario, setMostrarFormulario] = useState(true)
+
+  // Debug: Log del estado de autenticación
+  useEffect(() => {
+    console.log('🔍 App - Estado Auth:', { 
+      loading, 
+      currentUser: currentUser?.email || 'null', 
+      error,
+      mostrarFormulario 
+    })
+  }, [loading, currentUser, error, mostrarFormulario])
   const [datosViaje, setDatosViaje] = useState({
     destino: '',
     fecha: '',
@@ -30,14 +45,7 @@ function App() {
   const [mostrarFavoritos, setMostrarFavoritos] = useState(false)
   const [metricas, setMetricas] = useState(METRICAS_INICIALES)
 
-  const topDestinos = Object.entries(metricas.destinos || {})
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-
-  const consultasPorDiaOrdenadas = Object.entries(metricas.consultasPorDia || {})
-    .sort((a, b) => new Date(b[0]) - new Date(a[0]))
-    .slice(0, 5)
-
+  // useEffect para métricas - DEBE estar antes de cualquier return condicional
   useEffect(() => {
     const metricasGuardadas = localStorage.getItem('viajeia_metricas')
     let metricasActuales = metricasGuardadas ? JSON.parse(metricasGuardadas) : { ...METRICAS_INICIALES }
@@ -50,6 +58,102 @@ function App() {
     setMetricas(metricasActuales)
     localStorage.setItem('viajeia_metricas', JSON.stringify(metricasActuales))
   }, [])
+
+  // Mostrar pantalla de carga mientras se verifica la autenticación
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #1e3a5f 0%, #4a90e2 100%)',
+        color: 'white',
+        fontSize: '20px'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '20px' }}>✈️</div>
+          <div>Cargando ViajeIA...</div>
+          <div style={{ fontSize: '14px', marginTop: '20px', opacity: 0.8 }}>
+            Si esto tarda mucho, verifica tu conexión a internet
+          </div>
+          {error && (
+            <div style={{ 
+              fontSize: '12px', 
+              marginTop: '20px', 
+              padding: '10px',
+              background: 'rgba(255,0,0,0.2)',
+              borderRadius: '5px'
+            }}>
+              Error: {error}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Si hay un error crítico, mostrarlo
+  if (error && !currentUser) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #1e3a5f 0%, #4a90e2 100%)',
+        color: 'white',
+        padding: '20px'
+      }}>
+        <div style={{ textAlign: 'center', maxWidth: '500px' }}>
+          <div style={{ fontSize: '48px', marginBottom: '20px' }}>⚠️</div>
+          <h2>Error de Conexión</h2>
+          <p style={{ marginTop: '10px', opacity: 0.9 }}>{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            style={{
+              marginTop: '20px',
+              padding: '10px 20px',
+              background: 'white',
+              color: '#1e3a5f',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              fontSize: '16px'
+            }}
+          >
+            Recargar Página
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Si no hay usuario autenticado, mostrar pantalla de login/registro
+  if (!currentUser) {
+    console.log('🔍 No hay usuario, mostrando Login/Register')
+    return (
+      <>
+        {mostrarAuth === 'login' ? (
+          <Login onSwitchToRegister={() => setMostrarAuth('register')} />
+        ) : (
+          <Register onSwitchToLogin={() => setMostrarAuth('login')} />
+        )}
+      </>
+    )
+  }
+
+  // Si hay usuario autenticado, mostrar la aplicación
+  console.log('🔍 Usuario autenticado:', currentUser.email, 'mostrarFormulario:', mostrarFormulario)
+
+  // Calcular métricas (solo se usan si hay usuario autenticado)
+  const topDestinos = Object.entries(metricas.destinos || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+
+  const consultasPorDiaOrdenadas = Object.entries(metricas.consultasPorDia || {})
+    .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+    .slice(0, 5)
 
   const actualizarMetricas = (destinoActual) => {
     setMetricas((prev) => {
@@ -246,12 +350,43 @@ function App() {
         }
         setHistorial(prev => [...prev, nuevaEntrada])
         actualizarMetricas(datosViaje.destino)
+
+        // 🔥 Guardar consulta en Firebase
+        const resultadoConsulta = await guardarConsulta({
+          destino: datosViaje.destino,
+          fechaViaje: datosViaje.fecha,
+          presupuesto: datosViaje.presupuesto,
+          preferencias: datosViaje.preferencia,
+          pregunta: pregunta,
+          respuesta: nuevaRespuesta
+        })
+
+        if (!resultadoConsulta.success) {
+          console.error('Error al guardar consulta en Firebase:', resultadoConsulta.error)
+        }
       }
     } catch (error) {
       console.error('Error:', error)
       setRespuesta(`Error al conectar con el servidor: ${error.message}. Asegúrate de que el backend esté ejecutándose en http://localhost:5001`)
     } finally {
       setCargando(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+      // Limpiar estados locales al cerrar sesión
+      setMostrarFormulario(true)
+      setHistorial([])
+      setDatosViaje({
+        destino: '',
+        fecha: '',
+        presupuesto: '',
+        preferencia: ''
+      })
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error)
     }
   }
 
@@ -305,9 +440,22 @@ function App() {
       
       <div className="container">
         <header className="header">
-          <h1 className="titulo">ViajeIA - Tu Asistente Personal de Viajes</h1>
-          {!mostrarFormulario && (
-            <div className="header-buttons">
+          <div className="header-title-section">
+            <h1 className="titulo">ViajeIA - Tu Asistente Personal de Viajes</h1>
+            {userData && (
+              <p className="header-user-info">👤 Hola, {userData.nombre || currentUser.email}</p>
+            )}
+          </div>
+          <div className="header-buttons">
+            <button 
+              className="header-btn logout-btn"
+              onClick={handleLogout}
+              style={{ marginRight: '10px' }}
+            >
+              🚪 Cerrar Sesión
+            </button>
+            {!mostrarFormulario && (
+              <>
               <button 
                 className="header-btn"
                 onClick={() => setMostrarFavoritos(!mostrarFavoritos)}
@@ -330,8 +478,9 @@ function App() {
                   </button>
                 </>
               )}
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </header>
 
         {!mostrarFormulario && !mostrarFavoritos && (
@@ -628,4 +777,3 @@ function App() {
 }
 
 export default App
-
